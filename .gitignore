@@ -1,0 +1,5 @@
+# Compiled Java file
+*.class
+# Any PDF homework instructions
+*.pdf
+*.txt
