@@ -11,6 +11,7 @@ package miniJava.SyntacticAnalyzer;
 import miniJava.SyntacticAnalyzer.Scanner;
 import miniJava.SyntacticAnalyzer.TokenKind;
 import miniJava.ErrorReporter;
+import miniJava.AbstractSyntaxTrees.*;
 
 public class Parser {
 
@@ -54,18 +55,40 @@ public class Parser {
 	}
 	
 	//ClassDeclaration ::=class id { FieldMethodDeclaration* }
-	private void parseClass() throws SyntaxError{
+	private AST parseClass() throws SyntaxError{
+		FieldDeclList fdl = new FieldDeclList();
+		MethodDeclList mdl = new MethodDeclList();
 		accept(TokenKind.CLASS);
+		// get class name
+		String cn = token.toString();
 		accept(TokenKind.ID);
 		accept(TokenKind.LEFTCBRACKET);
 		while(token.kind != TokenKind.RIGHTCBRACKET){
-			parseFieldMethodDeclaration();
+			AST field_method_decl = parseFieldMethodDeclaration();
+			if(field_method_decl instanceof FieldDecl){
+				fdl.add((FieldDecl) field_method_decl);
+			}
+			else{
+				mdl.add((MethodDecl) field_method_decl);
+			}
+			//need to check the exact type of the result
 		}
 		accept(TokenKind.RIGHTCBRACKET);
+		ClassDecl class_decl = new ClassDecl(cn,fdl, mdl, null);
+		return class_decl;
 	}
 	
 	//FieldMethodDeclaration ::= Visibility Access (Type|void) id ( '('ParameterList?')') {statement*} )?
-	private void parseFieldMethodDeclaration() throws SyntaxError{
+	private AST parseFieldMethodDeclaration() throws SyntaxError{
+		boolean isPrivate;
+		boolean isStatic;
+		TypeDenoter t;
+		String name;
+		MemberDecl md;
+		ParameterDeclList pl;
+		StatementList sl;
+		SourcePosition posn = null;
+		
 		if(token.kind == TokenKind.PUBLIC || token.kind == TokenKind.PRIVATE){
 			acceptIt();
 		}
