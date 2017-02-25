@@ -195,6 +195,9 @@ public class Parser {
 		VarDecl vd;
 		String name;
 		Expression expr;
+		Identifier cn;
+		Reference ref;
+		ExprList el;
 		switch (token.kind){
 		// BlockStmt
 		case LEFTCBRACKET:
@@ -217,146 +220,201 @@ public class Parser {
 			accept(TokenKind.SEMICOL);
 			statement = new VarDeclStmt(vd, expr, null);
 			return statement;
-		//VarDeclStmt
-		/*gitttt*/
-		//ID needs to be debuged
+		/*
+		 * possible case: 
+		 * Var DeclStmt: Type id = Expression;
+		 * AssignStmt:   Reference = Expression;
+		 * CallStmt:     Reference (ArgumentList?);
+		 */
 		case ID:
+			Token reserved = token;
 			acceptIt();
 			switch(token.kind){
+			// Var DeclStmt: Type id = Expression;
 			case ID:
+				cn = new Identifier(reserved);
+				type = new ClassType(cn, null);
+				name = token.spelling;
 				acceptIt();
 				accept(TokenKind.ASSIGN);
-				parseExpression();
+				expr = parseExpression();
 				accept(TokenKind.SEMICOL);
-				return;
+				vd = new VarDecl(type, name, null);
+				statement = new VarDeclStmt(vd, expr, null);
+				return statement;
+			/* Var DeclStmt: Type id = Expression;
+			* AssignStmt:   Reference = Expression;
+			* CallStmt:     Reference (ArgumentList?);
+			*/
 			case LEFTSBRACKET:
 				acceptIt();
 				switch(token.kind){
-				//for expression
+					// Reference
+					//for expression
 					case ID: case NOT: case MINUS: case LPAREN:
 					case NUM: case TRUE: case FALSE: case NEW:
-						parseExpression();
+						cn = new Identifier(reserved);
+						expr = parseExpression();
 						accept(TokenKind.RIGHTSBRACKET);
+						ref = new IxIdRef(cn, expr, null);
 						while(token.kind == TokenKind.PERIOD){
 							acceptIt();
+							cn = new Identifier(token);
 							accept(TokenKind.ID);
 							if(token.kind == TokenKind.LEFTSBRACKET){
 								acceptIt();
-								parseExpression();
+								expr = parseExpression();
 								accept(TokenKind.RIGHTSBRACKET);
+								ref = new IxQRef(ref ,cn , expr, null);
+							}
+							else{
+								ref = new QRef(ref, cn, null);
 							}
 						}
 						switch(token.kind){
+						// AssignStmt
 						case ASSIGN:
 							acceptIt();
-							parseExpression();
+							expr = parseExpression();
 							accept(TokenKind.SEMICOL);
-							return;
+							statement = new AssignStmt(ref, expr, null);
+							return statement;
+						// CallStmt
 						case LPAREN:
 							acceptIt();
 							if(token.kind !=TokenKind.RPAREN){
-								parseArgumentList();
+								el = parseArgumentList();
 							}
 							accept(TokenKind.RPAREN);
 							accept(TokenKind.SEMICOL);
-							return;
+							statement = new CallStmt(ref, el, null);
+							return statement;
 						default:
 							parseError("Invalid Term - expecting LPAREN or ASSIGN but found " + token.kind);
-							return;
+							return null; // error
 						}
-					// for Type
+					// for Type, VarDeclStmt: Type id = Expression;
 					case RIGHTSBRACKET:
+						cn = new Identifier(reserved);
+						TypeDenoter array_type = new ClassType(cn, null);
+						type = new ArrayType(array_type, null);
 						acceptIt();
+						name = token.spelling;
+						vd = new VarDecl(type, name, null);
 						accept(TokenKind.ID);
 						accept(TokenKind.ASSIGN);
-						parseExpression();
+						expr = parseExpression();
 						accept(TokenKind.SEMICOL);
-						return;
+						statement = new VarDeclStmt(vd, expr, null);
+						return statement;
 					default:
 						parseError("Invalid Term - expecting ID, NOT,MINUS, LPAREN, NUM, TRUE"
 								+ "FALSE, NEW or RIGHTSBRACKET but found " + token.kind);
-						return;
+						return null;// error
 				}
 			//Reference
 			case PERIOD:
+				cn = new Identifier(reserved);
+				ref = new IdRef(cn, null);
 				while(token.kind == TokenKind.PERIOD){
 					acceptIt();
+					cn = new Identifier(token);
 					accept(TokenKind.ID);
 					//last changed
 					if(token.kind == TokenKind.LEFTSBRACKET){
 						acceptIt();
-						parseExpression();
+						expr = parseExpression();
 						accept(TokenKind.RIGHTSBRACKET);
+						ref = new IxIdRef(cn, expr, null);
 					}
-					switch(token.kind){
+					else{
+						ref = new QRef(ref, cn, null);
+					}
+				}
+				switch(token.kind){
+					//AssignStmt
 					case ASSIGN:
 						acceptIt();
-						parseExpression();
+						expr = parseExpression();
 						accept(TokenKind.SEMICOL);
-						return;
+						statement = new AssignStmt(ref, expr, null);
+						return statement;
+					//CallStmt
 					case LPAREN:
 						acceptIt();
 						if(token.kind !=TokenKind.RPAREN){
-							parseArgumentList();
+							el = parseArgumentList();
 						}
 						accept(TokenKind.RPAREN);
 						accept(TokenKind.SEMICOL);
-						return;
+						statement = new CallStmt(ref, el, null);
+						return statement;
 					default:
 						parseError("Invalid Term - expecting LPAREN or ASSIGN but found " + token.kind);
-						return;
+						return null; // ERROR
 					}
-				}
-				return;
-			//Reference
+			// AssignStmt
 			case ASSIGN:
+				cn = new Identifier(reserved);
+				ref = new IdRef(cn, null);
 				acceptIt();
-				parseExpression();
+				expr = parseExpression();
 				accept(TokenKind.SEMICOL);
-				return;
+				statement = new AssignStmt(ref, expr, null);
+				return statement;
 				
 			case LPAREN:
+				cn = new Identifier(reserved);
+				ref = new IdRef(cn, null);
 				acceptIt();
 				if(token.kind !=TokenKind.RPAREN){
-					parseArgumentList();
+					el = parseArgumentList();
 				}
 				accept(TokenKind.RPAREN);
 				accept(TokenKind.SEMICOL);
-				return;
+				statement = new CallStmt(ref, el, null);
+				return statement;
 				
 			default:
 				parseError("Invalid Term - expecting ID, LEFTSBRACKET, PERIOD, ASSIG or LPAREN but found "+ token.kind);
+				return null; //ERROR
 			}
 
-			
+		//Reference
 		case THIS:
-			parseReference();
+			ref = parseReference();
 			switch(token.kind){
 			case ASSIGN:
 				acceptIt();
-				parseExpression();
+				expr = parseExpression();
 				accept(TokenKind.SEMICOL);
-				return;
+				statement =new AssignStmt(ref, expr, null);
+				return statement;
 			
 			case LPAREN:
 				acceptIt();
 				if(token.kind != TokenKind.RPAREN){
-					parseArgumentList();
+					el = parseArgumentList();
 				}
 				accept(TokenKind.RPAREN);
 				accept(TokenKind.SEMICOL);
-				return;
+				statement = new CallStmt(ref, el, null);
+				return statement;
 				
 			default:
 				parseError("Invalid Term - expecting Assign or LPAREN but found " + token.kind);
+				return null; //Error
 			}
 		case RETURN:
 			acceptIt();
 			if(token.kind != TokenKind.SEMICOL){
-				parseExpression();
+				expr = parseExpression();
+				statement = new ReturnStmt(expr, null);
 			}
 			accept(TokenKind.SEMICOL);
-			return;
+			// Need To Check How to Deal With Return
+			statement = new ReturnStmt(null,null);
+			return statement;
 			
 		case IF:
 			acceptIt();
@@ -384,16 +442,19 @@ public class Parser {
 	}
 	
 	//ArgumentList ::= Expression (, Expression)*
-	private void parseArgumentList() throws SyntaxError{
-		parseExpression();
+	private ExprList parseArgumentList() throws SyntaxError{
+		ExprList el = new ExprList();
+		Expression expr = parseExpression();
+		el.add(expr);
 		while(token.kind == TokenKind.COMMA){
 			acceptIt();
-			parseExpression();
+			el.add(parseExpression());
 		}
+		return el;
 	}
 	
 	//Expression = (...|...|...) (binop Expression)*
-	private void parseExpression() throws SyntaxError{
+	private Expression parseExpression() throws SyntaxError{
 		switch (token.kind){
 		case ID:
 			parseReference();
@@ -540,7 +601,7 @@ public class Parser {
 	//ReferenceSkipId::= ([Expression])? ( . id ([Expression])?)*
 
 	//Reference::= ( id ([Expression])? | this ) ( . id ([Expression])?)*
-	private void parseReference() throws SyntaxError{
+	private Reference parseReference() throws SyntaxError{
 		switch(token.kind){
 		case ID:
 			acceptIt();
