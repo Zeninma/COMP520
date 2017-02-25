@@ -64,7 +64,7 @@ public class Parser {
 		accept(TokenKind.ID);
 		accept(TokenKind.LEFTCBRACKET);
 		while(token.kind != TokenKind.RIGHTCBRACKET){
-			AST field_method_decl = parseFieldMethodDeclaration();
+			MemberDecl field_method_decl = parseFieldMethodDeclaration();
 			if(field_method_decl instanceof FieldDecl){
 				fdl.add((FieldDecl) field_method_decl);
 			}
@@ -79,21 +79,27 @@ public class Parser {
 	}
 	
 	//FieldMethodDeclaration ::= Visibility Access (Type|void) id ( '('ParameterList?')') {statement*} )?
-	private AST parseFieldMethodDeclaration() throws SyntaxError{
-		boolean isPrivate;
-		boolean isStatic;
-		TypeDenoter t;
+	private MemberDecl parseFieldMethodDeclaration() throws SyntaxError{
+		boolean isPrivate = false;
+		boolean isStatic = true;
+		TypeDenoter t = null;
 		String name;
 		MemberDecl md;
-		ParameterDeclList pl;
-		StatementList sl;
+		ParameterDeclList pl = null;
+		StatementList sl = new StatementList();
 		SourcePosition posn = null;
 		
-		if(token.kind == TokenKind.PUBLIC || token.kind == TokenKind.PRIVATE){
+		if(token.kind == TokenKind.PUBLIC ){
 			acceptIt();
+			isPrivate = false;
+		}
+		else if(token.kind == TokenKind.PRIVATE){
+			acceptIt();
+			isPrivate = true;
 		}
 		if(token.kind == TokenKind.STATIC){
 			acceptIt();
+			isStatic = true;
 		}
 		//parse Type
 		switch (token.kind){
@@ -102,82 +108,117 @@ public class Parser {
 			if(token.kind == TokenKind.LEFTSBRACKET){
 				acceptIt();
 				accept(TokenKind.RIGHTSBRACKET);
+				TypeDenoter temp_t = new BaseType(TypeKind.INT, posn);
+				t = new ArrayType(temp_t, null);
+			}
+			else{
+				t = new BaseType(TypeKind.INT, posn);
 			}
 			break;
 			
 		case ID:
+			Identifier tmp_id = new Identifier(token);
 			acceptIt();
 			if(token.kind == TokenKind.LEFTSBRACKET){
 				acceptIt();
 				accept(TokenKind.RIGHTSBRACKET);
+				t = new ClassType(tmp_id ,posn);
 			}
 			break;
 			
 		case BOOL:
+			t = new BaseType(TypeKind.BOOLEAN, posn);
 			acceptIt();
 			break;
 			
 		case VOID:
+			// void indicates this is a method declaration
+			t = new BaseType(TypeKind.VOID, posn);
 			acceptIt();
+			name = token.spelling;
 			accept(TokenKind.ID);
+			MemberDecl member_decl = new FieldDecl(isPrivate, isStatic, t, name, posn);
+			pl = new ParameterDeclList();
 			accept(TokenKind.LPAREN);
 			if(token.kind != TokenKind.RPAREN){
-				parseParameterList();
+				pl = parseParameterList();
 			}
 			accept(TokenKind.RPAREN);
 			accept(TokenKind.LEFTCBRACKET);
+			sl = new StatementList(); 
 			while(token.kind != TokenKind.RIGHTCBRACKET){
-				parseStatement();
+				sl.add(parseStatement());
 			}
 			accept(TokenKind.RIGHTCBRACKET);
-			return;
-			
+			MethodDecl method_decl = new MethodDecl(member_decl, pl, sl, posn);
+			return method_decl;
 		default:
 			parseError("Invalid Term - expecting Type or Void but found" + token.kind);
+			break;
 		}
+		name = token.spelling;
 		accept(TokenKind.ID);
+		MemberDecl member_decl = new FieldDecl(isPrivate, isStatic, t, name, posn);
 		switch(token.kind){
+		//LPAREN indicates is a method_decl
 		case LPAREN:
 			acceptIt();
 			if(token.kind != TokenKind.RPAREN){
-				parseParameterList();
+				pl = parseParameterList();
 			}
 			accept(TokenKind.RPAREN);
 			accept(TokenKind.LEFTCBRACKET);
 			while(token.kind != TokenKind.RIGHTCBRACKET){
-				parseStatement();
+				sl.add(parseStatement());
 			}
 			accept(TokenKind.RIGHTCBRACKET);
-			return;
+			MethodDecl method_decl = new MethodDecl(member_decl, pl, sl, posn);
+			return method_decl;
+		// SEMICOL indicates this is a Field decl
 		case SEMICOL:
 			acceptIt();
-			return;
+			return member_decl;
 		default:
+			// may need to return ERROR
 			parseError("Invalid Term - expecting LPAREN or SEMICOL but found" + token.kind);
+			break;
 		}
+		return null; // means error
 	}
 	
 	
 	//Statement ::= (...|...|...)
-	private void parseStatement() throws SyntaxError{
+	private Statement parseStatement() throws SyntaxError{
+		SourcePosition posn = null;
+		Statement statement;
+		TypeDenoter type;
+		VarDecl vd;
+		String name;
+		Expression expr;
 		switch (token.kind){
+		// BlockStmt
 		case LEFTCBRACKET:
 			acceptIt();
+			StatementList sl = new StatementList();
 			while(token.kind != TokenKind.RIGHTCBRACKET){
-				parseStatement();
+				sl.add(parseStatement());
 			}
 			accept(TokenKind.RIGHTCBRACKET);
-			return;
-			
+			statement = new BlockStmt(sl, posn);
+			return statement;
+		//VarDeclStmt
 		case INT: case BOOL:
-			parseType();
+			type = parseType();
+			name = token.spelling;
 			accept(TokenKind.ID);
+			vd = new VarDecl(type, name, null);
 			accept(TokenKind.ASSIGN);
-			parseExpression();
+			expr = parseExpression();
 			accept(TokenKind.SEMICOL);
-			return;
+			statement = new VarDeclStmt(vd, expr, null);
+			return statement;
+		//VarDeclStmt
 		/*gitttt*/
-		/*gittt*/	
 		//ID needs to be debuged
 		case ID:
 			acceptIt();
@@ -538,7 +579,7 @@ public class Parser {
 	}
 	
 	//ParameterList ::= Type id (, Type id)*
-	private void parseParameterList() throws SyntaxError{
+	private ParameterDeclList parseParameterList() throws SyntaxError{
 		parseType();
 		accept(TokenKind.ID);
 		while(token.kind == TokenKind.COMMA){
@@ -549,30 +590,40 @@ public class Parser {
 	}
 	
 	//Type ::= int | boolean | id | (int | id) []
-	private void parseType() throws SyntaxError{
+	private TypeDenoter parseType() throws SyntaxError{
+		TypeDenoter temp_type = null;
+		TypeDenoter final_type = null;
 		switch (token.kind){
 		case INT:
+			temp_type = new BaseType(TypeKind.INT, null);
 			acceptIt();
 			if(token.kind == TokenKind.LEFTSBRACKET){
 				acceptIt();
 				accept(TokenKind.RIGHTSBRACKET);
+				final_type = new ArrayType(temp_type, null);
+				return final_type;
 			}
-			return;
+			return temp_type;
 			
 		case ID:
+			Identifier id = new Identifier(token);
+			temp_type = new ClassType(id, null);
 			acceptIt();
 			if(token.kind == TokenKind.LEFTSBRACKET){
 				acceptIt();
 				accept(TokenKind.RIGHTSBRACKET);
+				final_type = new ArrayType(temp_type, null);
 			}
-			return;
+			return temp_type;
 			
 		case BOOL:
 			acceptIt();
-			return;
+			temp_type = new BaseType(TypeKind.BOOLEAN, null);
+			return temp_type;
 			
 		default:
 			parseError("Invalid Term - expecting Type or Void but found" + token.kind);
+			return null; // error
 		}
 	}
 
