@@ -6,6 +6,7 @@ import java.io.InputStream;
 
 import miniJava.SyntacticAnalyzer.Parser;
 import miniJava.SyntacticAnalyzer.Scanner;
+import miniJava.AbstractSyntaxTrees.*;
 
 /**
  * Recognize whether input entered through the keyboard is a valid
@@ -13,9 +14,7 @@ import miniJava.SyntacticAnalyzer.Scanner;
  * 
  */
 public class Compiler {
-
 	public static void main(String[] args) {
-
 		InputStream inputStream = null;
 		try{
 			inputStream = new FileInputStream(args[0]);
@@ -28,10 +27,12 @@ public class Compiler {
 		ErrorReporter reporter = new ErrorReporter();
 		Scanner scanner = new Scanner(inputStream, reporter);
 		Parser parser = new Parser(scanner, reporter);
+		AST ast = parser.parse();
+		
 
-		System.out.println("Syntactic analysis ... ");
-		parser.parse();
-		System.out.print("Syntactic analysis complete:  ");
+		ASTDisplay display = new ASTDisplay();
+		display.showTree(ast);
+		
 		if (reporter.hasErrors()) {
 			System.out.println("INVALID miniJava program");
 			System.exit(4);
