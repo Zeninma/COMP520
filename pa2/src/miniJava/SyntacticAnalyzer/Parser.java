@@ -12,6 +12,7 @@ import miniJava.SyntacticAnalyzer.Scanner;
 import miniJava.SyntacticAnalyzer.TokenKind;
 import miniJava.ErrorReporter;
 import miniJava.AbstractSyntaxTrees.*;
+import miniJava.AbstractSyntaxTrees.Package;
 
 public class Parser {
 
@@ -38,29 +39,36 @@ public class Parser {
 	/**
 	 *  parse input, catch possible parse error
 	 */
-	public void parse() {
+	public Package parse() {
 		token = scanner.scan();
 		try {
-			parseProgram();
+			return parsePackage();
 		}
-		catch (SyntaxError e) { }
+		catch (SyntaxError e) { 
+			System.exit(4);
+			return null;
+		}
 	}
 
 	//    Program ::= (ClassDeclaration)* eot$
-	private void parseProgram() throws SyntaxError {
+	private Package parsePackage() throws SyntaxError {
+		Package pack;
+		ClassDeclList cl = new ClassDeclList();
 		while(token.kind == TokenKind.CLASS){
-			parseClass();
+			cl.add(parseClass());
 		}
 		accept(TokenKind.EOT);
+		pack = new Package(cl,null);
+		return pack;
 	}
 	
 	//ClassDeclaration ::=class id { FieldMethodDeclaration* }
-	private AST parseClass() throws SyntaxError{
+	private ClassDecl parseClass() throws SyntaxError{
 		FieldDeclList fdl = new FieldDeclList();
 		MethodDeclList mdl = new MethodDeclList();
 		accept(TokenKind.CLASS);
 		// get class name
-		String cn = token.toString();
+		String cn = token.spelling;
 		accept(TokenKind.ID);
 		accept(TokenKind.LEFTCBRACKET);
 		while(token.kind != TokenKind.RIGHTCBRACKET){
@@ -81,11 +89,11 @@ public class Parser {
 	//FieldMethodDeclaration ::= Visibility Access (Type|void) id ( '('ParameterList?')') {statement*} )?
 	private MemberDecl parseFieldMethodDeclaration() throws SyntaxError{
 		boolean isPrivate = false;
-		boolean isStatic = true;
+		boolean isStatic = false;
 		TypeDenoter t = null;
 		String name;
 		MemberDecl md;
-		ParameterDeclList pl = null;
+		ParameterDeclList pl = new ParameterDeclList();
 		StatementList sl = new StatementList();
 		SourcePosition posn = null;
 		
@@ -145,7 +153,6 @@ public class Parser {
 			}
 			accept(TokenKind.RPAREN);
 			accept(TokenKind.LEFTCBRACKET);
-			sl = new StatementList(); 
 			while(token.kind != TokenKind.RIGHTCBRACKET){
 				sl.add(parseStatement());
 			}
@@ -183,6 +190,7 @@ public class Parser {
 			parseError("Invalid Term - expecting LPAREN or SEMICOL but found" + token.kind);
 			break;
 		}
+		System.exit(4);
 		return null; // means error
 	}
 	
@@ -285,12 +293,16 @@ public class Parser {
 							if(token.kind !=TokenKind.RPAREN){
 								el = parseArgumentList();
 							}
+							else{
+								el = new ExprList();
+							}
 							accept(TokenKind.RPAREN);
 							accept(TokenKind.SEMICOL);
 							statement = new CallStmt(ref, el, null);
 							return statement;
 						default:
 							parseError("Invalid Term - expecting LPAREN or ASSIGN but found " + token.kind);
+							System.exit(4);
 							return null; // error
 						}
 					// for Type, VarDeclStmt: Type id = Expression;
@@ -310,6 +322,7 @@ public class Parser {
 					default:
 						parseError("Invalid Term - expecting ID, NOT,MINUS, LPAREN, NUM, TRUE"
 								+ "FALSE, NEW or RIGHTSBRACKET but found " + token.kind);
+						System.exit(0);
 						return null;// error
 				}
 			//Reference
@@ -325,7 +338,7 @@ public class Parser {
 						acceptIt();
 						expr = parseExpression();
 						accept(TokenKind.RIGHTSBRACKET);
-						ref = new IxIdRef(cn, expr, null);
+						ref = new IxQRef(ref, cn, expr, null);
 					}
 					else{
 						ref = new QRef(ref, cn, null);
@@ -345,12 +358,16 @@ public class Parser {
 						if(token.kind !=TokenKind.RPAREN){
 							el = parseArgumentList();
 						}
+						else{
+							el = new ExprList();
+						}
 						accept(TokenKind.RPAREN);
 						accept(TokenKind.SEMICOL);
 						statement = new CallStmt(ref, el, null);
 						return statement;
 					default:
 						parseError("Invalid Term - expecting LPAREN or ASSIGN but found " + token.kind);
+						System.exit(4);
 						return null; // ERROR
 					}
 			// AssignStmt
@@ -370,6 +387,9 @@ public class Parser {
 				if(token.kind !=TokenKind.RPAREN){
 					el = parseArgumentList();
 				}
+				else{
+					el = new ExprList();
+				}
 				accept(TokenKind.RPAREN);
 				accept(TokenKind.SEMICOL);
 				statement = new CallStmt(ref, el, null);
@@ -377,6 +397,7 @@ public class Parser {
 				
 			default:
 				parseError("Invalid Term - expecting ID, LEFTSBRACKET, PERIOD, ASSIG or LPAREN but found "+ token.kind);
+				System.exit(4);
 				return null; //ERROR
 			}
 
@@ -396,6 +417,9 @@ public class Parser {
 				if(token.kind != TokenKind.RPAREN){
 					el = parseArgumentList();
 				}
+				else{
+					el = new ExprList();
+				}
 				accept(TokenKind.RPAREN);
 				accept(TokenKind.SEMICOL);
 				statement = new CallStmt(ref, el, null);
@@ -403,6 +427,7 @@ public class Parser {
 				
 			default:
 				parseError("Invalid Term - expecting Assign or LPAREN but found " + token.kind);
+				System.exit(4);
 				return null; //Error
 			}
 		case RETURN:
@@ -415,29 +440,37 @@ public class Parser {
 			// Need To Check How to Deal With Return
 			statement = new ReturnStmt(null,null);
 			return statement;
-			
+		//IfStmt
 		case IF:
 			acceptIt();
 			accept(TokenKind.LPAREN);
-			parseExpression();
+			expr = parseExpression();
 			accept(TokenKind.RPAREN);
-			parseStatement();
+			Statement if_stmt = parseStatement();
 			if(token.kind == TokenKind.ELSE){
 				acceptIt();
-				parseStatement();
+				Statement else_stmt = parseStatement();
+				statement = new IfStmt(expr, if_stmt, else_stmt, null);
+				return statement;
 			}
-			return;
-			
+			else{
+				statement = new IfStmt(expr, if_stmt, null);
+				return statement;
+			}
+		//WhileStmt
 		case WHILE:
 			acceptIt();
 			accept(TokenKind.LPAREN);
-			parseExpression();
+			expr = parseExpression();
 			accept(TokenKind.RPAREN);
-			parseStatement();
-			return;
+			Statement do_while_stmt = parseStatement();
+			statement = new WhileStmt(expr, do_while_stmt, null);
+			return statement;
 			
 		default:
 			parseError("Invalid Term - expecting LEFTCBRACKET or ID, BOOL, INT, THIS, RETURN, IF OR WHILE but found " + token.kind);
+			System.exit(4);
+			return null; // Error
 		}
 	}
 	
@@ -453,201 +486,315 @@ public class Parser {
 		return el;
 	}
 	
-	//Expression = (...|...|...) (binop Expression)*
+	
+	// Deal with Precedence, building AST tree
 	private Expression parseExpression() throws SyntaxError{
-		switch (token.kind){
+		Expression expr = parseDisjunction();
+		return expr;
+	}
+	
+	private Expression parseDisjunction() throws SyntaxError{
+		Expression expr = parseConjunction();
+		Operator op;
+		while(token.kind == TokenKind.OR){
+			op = new Operator(token);
+			acceptIt();
+			Expression expr_right = parseConjunction();
+			expr = new BinaryExpr(op, expr, expr_right, null);
+		}
+		return expr;
+	}
+	
+	private Expression parseConjunction() throws SyntaxError {
+		Expression expr = parseEquality();
+		Operator op;
+		while (token.kind == TokenKind.AND){
+			op = new Operator(token);
+			acceptIt();
+			Expression expr_right = parseEquality();
+			expr = new BinaryExpr(op, expr, expr_right, null);
+		}
+		return expr;
+	}
+	
+	private Expression parseEquality() throws SyntaxError {
+		Expression expr = parseRelational();
+		Operator op;
+		while (token.kind == TokenKind.EQUAL || token.kind == TokenKind.NEQ){
+			op = new Operator(token);
+			acceptIt();
+			Expression expr_right = parseRelational();
+			expr = new BinaryExpr(op, expr, expr_right, null);
+		}
+		return expr;
+	}
+	
+	private Expression parseRelational() throws SyntaxError{
+		Expression expr = parseAdditive();
+		Operator op;
+		while (token.kind == TokenKind.GT || token.kind == TokenKind.LT
+				|| token.kind == TokenKind.GEQ || token.kind == TokenKind.LEQ){
+			op = new Operator(token);
+			acceptIt();
+			Expression expr_right = parseAdditive();
+			expr = new BinaryExpr(op, expr, expr_right, null);
+		}
+		return expr;
+	}
+	
+	private Expression parseAdditive() throws SyntaxError {
+		Expression expr = parseMultiplicative();
+		Operator op;
+		while (token.kind == TokenKind.PLUS || token.kind == TokenKind.MINUS){
+			op=new Operator(token);
+			acceptIt();
+			Expression expr_right = parseMultiplicative();
+			expr = new BinaryExpr(op, expr, expr_right, null);
+		}
+		return expr;
+	}
+	
+	private Expression parseMultiplicative() throws SyntaxError {
+		Expression expr = parseUnary();
+		Operator op;
+		while (token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE){
+			op = new Operator(token);
+			acceptIt();
+			Expression expr_right = parseUnary();
+			expr = new BinaryExpr(op, expr, expr_right, null);
+		}
+		return expr;
+	}
+	
+	private Expression parseUnary() throws SyntaxError {
+		Expression expr;
+		Operator op;
+		if (token.kind == TokenKind.NOT || token.kind == TokenKind.MINUS){
+			op = new Operator(token);
+			acceptIt();
+			Expression expr_right = parseUnary();
+			expr = new UnaryExpr(op, expr_right, null);
+		} else {
+			expr = parseParen();
+		}
+		return expr;
+	}
+	
+	private Expression parseParen() throws SyntaxError {
+		Expression expr;
+		if (token.kind == TokenKind.LPAREN){
+			acceptIt();
+			expr = parseExpression();
+			accept(TokenKind.RPAREN);
+		} else {
+			expr = parseOperand();
+		}
+		return expr;
+	}
+	
+	private Expression parseOperand() throws SyntaxError {
+		Expression expr;
+		Terminal term;
+		Reference ref;
+		Identifier cn;
+		switch (token.kind) {
 		case ID:
-			parseReference();
-			if(token.kind == TokenKind.LPAREN){
-				acceptIt();
-				if(token.kind != TokenKind.RPAREN){
-					parseArgumentList();
-				}
-				accept(TokenKind.RPAREN);
-			}
-			while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-					token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-					token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-					token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-				acceptIt();
-				parseExpression();
-			}
-			return;
-		
-		case THIS:
-			parseReference();
-			if(token.kind == TokenKind.LPAREN){
-				acceptIt();
-				if(token.kind != TokenKind.RPAREN){
-					parseArgumentList();
-				}
-				accept(TokenKind.RPAREN);
-			}
-			while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-					token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-					token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-					token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-				acceptIt();
-				parseExpression();
-			}
-			return;
-			
-		case NOT: case MINUS:
-			if(this.has_minus_unop && token.kind == TokenKind.MINUS){
-				parseError("Invalid Term - expect NOT but found " + token.kind + "illegal consectutive MINUS (-)");
-			}
-			else if(token.kind == TokenKind.NOT && this.has_minus_unop){
-				this.has_minus_unop = false;
-			}
-			else if (token.kind == TokenKind.MINUS){
-				this.has_minus_unop = true;
-			}
-			else{
-				this.has_minus_unop = false;
-			}
+			Identifier id = new Identifier(token);
+			ref = new IdRef(id, null);
 			acceptIt();
-			parseExpression();
-			while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-					token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-					token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-					token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-				acceptIt();
-				parseExpression();
-			}
-			return;
-			
-		case LPAREN:
-			acceptIt();
-			parseExpression();
-			accept(TokenKind.LPAREN);
-			while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-					token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-					token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-					token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-				acceptIt();
-				parseExpression();
-			}
-			return;
-			
-		case NUM: case TRUE: case FALSE:
-			acceptIt();
-			while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-					token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-					token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-					token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-				acceptIt();
-				parseExpression();
-			}
-			return;
-			
-		case NEW:
-			acceptIt();
-			switch(token.kind){
-				case ID:
+			if(token.kind == TokenKind.PERIOD){
+				while(token.kind == TokenKind.PERIOD){
 					acceptIt();
+					cn = new Identifier(token);
+					accept(TokenKind.ID);
+					//last changed
 					if(token.kind == TokenKind.LEFTSBRACKET){
 						acceptIt();
-						parseExpression();
+						expr = parseExpression();
 						accept(TokenKind.RIGHTSBRACKET);
-					}
-					else if(token.kind == TokenKind.LPAREN){
-						acceptIt();
-						accept(TokenKind.RPAREN);
+						ref = new IxQRef(ref,cn, expr, null);
 					}
 					else{
-						parseError("Invalid Term - expecting LEFTCBRACKET or LPAREN but found " + token.kind);
-						break;
+						ref = new QRef(ref, cn, null);
 					}
-					while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-							token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-							token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-							token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-						acceptIt();
-						parseExpression();
-					}
-					return;
-				case INT:
-					acceptIt();
-					accept(TokenKind.LEFTSBRACKET);
-					parseExpression();
-					accept(TokenKind.RIGHTSBRACKET);
-					while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-							token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-							token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-							token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-						acceptIt();
-						parseExpression();
-					}
-					return;
-				default:
-					parseError("Invalid Term - expecting INT or ID but found " + token.kind);
+				}
 			}
-			
+			//keep parsing after period
+			if(token.kind == TokenKind.LPAREN){
+				acceptIt();
+				ExprList el = new ExprList();
+				if(token.kind != TokenKind.RPAREN){
+					el = parseArgumentList();
+				}
+				accept(TokenKind.RPAREN);
+				expr = new CallExpr(ref, el, null);
+			} else {
+				expr = new RefExpr(ref, null);
+			}
+			return expr;
 		
+		case THIS:
+			ref = new ThisRef(null);	
+			acceptIt();
+			if(token.kind == TokenKind.PERIOD){
+				while(token.kind == TokenKind.PERIOD){
+					acceptIt();
+					cn = new Identifier(token);
+					accept(TokenKind.ID);
+					//last changed
+					if(token.kind == TokenKind.LEFTSBRACKET){
+						acceptIt();
+						expr = parseExpression();
+						accept(TokenKind.RIGHTSBRACKET);
+						ref = new IxQRef(ref, cn, expr, null);
+					}
+					else{
+						ref = new QRef(ref, cn, null);
+					}
+				}
+			}
+			//keep parsing after period
+			if(token.kind == TokenKind.LPAREN){
+				acceptIt();
+				ExprList el = new ExprList();
+				if(token.kind != TokenKind.RPAREN){
+					el = parseArgumentList();
+				}
+				accept(TokenKind.RPAREN);
+				expr = new CallExpr(ref, el, null);
+			} else {
+				expr = new RefExpr(ref, null);
+			}
+			return expr;
+
+		case NUM:
+			term = new IntLiteral(token);
+			expr = new LiteralExpr(term,null);
+			acceptIt();
+			return expr;
+			
+		case TRUE: case FALSE:
+			term = new BooleanLiteral(token);
+			expr = new LiteralExpr(term,null);
+			acceptIt();
+			return expr;
+			
+		case NEW:
+			Expression temp_expr;
+			TypeDenoter type;
+			acceptIt();
+			if(token.kind == TokenKind.INT){
+				type = new BaseType(TypeKind.INT, null);
+				acceptIt();
+				accept(TokenKind.LEFTSBRACKET);
+				temp_expr = parseExpression();
+				accept(TokenKind.RIGHTSBRACKET);
+				expr = new NewArrayExpr(type, temp_expr, null);
+			}
+			else{
+				cn = new Identifier(token);
+				type = new ClassType(cn, null);
+				accept(TokenKind.ID);
+				if(token.kind == TokenKind.LPAREN){
+					acceptIt();
+					accept(TokenKind.RPAREN);
+					expr = new NewObjectExpr((ClassType) type, null);
+				}
+				else {
+					accept(TokenKind.LEFTSBRACKET);
+					temp_expr = parseExpression();
+					accept(TokenKind.RIGHTSBRACKET);
+					expr = new NewArrayExpr(type, temp_expr, null);
+				}
+			}
+			return expr;
+			
 		default:
-			parseError("Invalid Term - expecting ID, unop, LPAREN, NUM, TRUE, FALSE "
-					+ "or NEW but found " + token.kind);
+			parseError("Invalid Term - Expecting an expression leaf but found " + token.kind);
+			System.exit(4);
+			return null; // ERROR
 		}
-		//11 binop in total
-//		while(token.kind == TokenKind.GT || token.kind == TokenKind.LT || token.kind == TokenKind.EQUAL ||
-//				token.kind == TokenKind.LEQ|| token.kind == TokenKind.GEQ || token.kind == TokenKind.NEQ||
-//				token.kind == TokenKind.AND || token.kind == TokenKind.OR || token.kind == TokenKind.PLUS||
-//				token.kind == TokenKind.TIMES || token.kind == TokenKind.DIVIDE || token.kind == TokenKind.MINUS){
-//			acceptIt();
-//			parseExpression();
-//		}
 	}
 	
 	//ReferenceSkipId::= ([Expression])? ( . id ([Expression])?)*
 
 	//Reference::= ( id ([Expression])? | this ) ( . id ([Expression])?)*
 	private Reference parseReference() throws SyntaxError{
+		Reference ref;
+		Identifier id;
+		Expression expr;
 		switch(token.kind){
 		case ID:
+			id = new Identifier(token); 
 			acceptIt();
 			if(token.kind == TokenKind.LEFTSBRACKET){
 				acceptIt();
-				parseExpression();
+				expr = parseExpression();
 				accept(TokenKind.RIGHTSBRACKET);
+				ref = new IxIdRef(id, expr, null);
+			}
+			else{
+				ref = new IdRef(id, null);
 			}
 			while(token.kind == TokenKind.PERIOD){
 				acceptIt();
+				id = new Identifier(token);
 				accept(TokenKind.ID);
 				if(token.kind == TokenKind.LEFTSBRACKET){
 					acceptIt();
-					parseExpression();
+					expr = parseExpression();
 					accept(TokenKind.RIGHTSBRACKET);
+					ref = new IxQRef(ref, id, expr, null);
+				}
+				else{
+					ref = new QRef(ref, id, null);
 				}
 			}
-			return;
+			return ref;
 			
 		case THIS:
+			ref = new ThisRef(null);
 			acceptIt();
 			while(token.kind == TokenKind.PERIOD){
 				acceptIt();
+				id = new Identifier(token);
 				accept(TokenKind.ID);
 				if(token.kind == TokenKind.LEFTSBRACKET){
 					acceptIt();
-					parseExpression();
+					expr = parseExpression();
 					accept(TokenKind.RIGHTSBRACKET);
+					ref = new IxQRef(ref, id, expr, null);
+				}
+				else{
+					ref = new QRef(ref, id, null);
 				}
 			}
-			return;
+			return ref;
 			
 		default:
 			parseError("Invalid Term - expecting ID or THIS but found " + token.kind);
+			System.exit(4);
+			return null; //ERROR
 		}
 	}
 	
 	//ParameterList ::= Type id (, Type id)*
 	private ParameterDeclList parseParameterList() throws SyntaxError{
-		parseType();
+		ParameterDeclList pl = new ParameterDeclList();
+		String name = token.spelling;
+		TypeDenoter type = parseType();
+		ParameterDecl p_dcl = new ParameterDecl(type, name, null);
+		pl.add(p_dcl);
 		accept(TokenKind.ID);
 		while(token.kind == TokenKind.COMMA){
 			acceptIt();
-			parseType();
+			name = token.spelling;
+			type = parseType();
+			p_dcl = new ParameterDecl(type, name, null);
+			pl.add(p_dcl);
 			accept(TokenKind.ID);
 		}
+		return pl;
 	}
 	
 	//Type ::= int | boolean | id | (int | id) []
@@ -684,6 +831,7 @@ public class Parser {
 			
 		default:
 			parseError("Invalid Term - expecting Type or Void but found" + token.kind);
+			System.exit(4);
 			return null; // error
 		}
 	}
