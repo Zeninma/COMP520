@@ -82,54 +82,6 @@ public class Scanner{
 		TokenKind kind = scanToken();
 		String spelling = currentSpelling.toString();
 		return new Token(kind, spelling);
-		
-		
-		
-//		
-//		//if the tokken is the start of multi-line comment '/*'
-//		if(kind == TokenKind.COMMENTSTART){
-//			while( (kind != TokenKind.COMMENTEND) && (kind != TokenKind.EOT)){
-//				currentSpelling = new StringBuilder();
-//				kind = scanToken();
-//			}
-//			if(kind == TokenKind.EOT){
-//				scanError("Comment has no end ");
-//				return new Token(TokenKind.ERROR, currentSpelling.toString());
-//			}
-//			else{
-//				skipIt();
-//				currentSpelling = new StringBuilder();
-//				kind = scanToken();
-//				String spelling = currentSpelling.toString();
-//				return new Token(kind, spelling);
-//			}
-//		}
-//		
-//		//if token is one line comment '//'	
-//		else if(kind == TokenKind.LCOMMENT){
-//			while( kind != TokenKind.NEWLINE && kind != TokenKind.EOT){
-//				currentSpelling = new StringBuilder();
-//				kind = scanToken();
-//			}
-//			if( kind == TokenKind.EOT){
-//				String spelling = currentSpelling.toString();
-//				return new Token(kind, spelling);
-//			}
-//			else{
-//				skipIt();
-//				currentSpelling = new StringBuilder();
-//				kind = scanToken();
-//				String spelling = currentSpelling.toString();
-//				return new Token(kind, spelling);
-//			}
-//		}
-//		
-//		//for other cases directly return the scanned token
-//		else{
-//			String spelling = currentSpelling.toString();
-//			// return new token
-//			return new Token(kind, spelling);
-//		}
 	}
 
 	/**

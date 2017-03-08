@@ -131,6 +131,10 @@ public class Parser {
 				acceptIt();
 				accept(TokenKind.RIGHTSBRACKET);
 				t = new ClassType(tmp_id ,posn);
+				t = new ArrayType(t, null); //previously forgot addinh Array type here, even I am considering for 'id[]'
+			}
+			else{
+				t = new ClassType(tmp_id, posn);
 			}
 			break;
 			
@@ -436,9 +440,11 @@ public class Parser {
 				expr = parseExpression();
 				statement = new ReturnStmt(expr, null);
 			}
+			else{
+				statement = new ReturnStmt(null,null);
+			}
 			accept(TokenKind.SEMICOL);
 			// Need To Check How to Deal With Return
-			statement = new ReturnStmt(null,null);
 			return statement;
 		//IfStmt
 		case IF:
@@ -599,36 +605,22 @@ public class Parser {
 		Identifier cn;
 		switch (token.kind) {
 		case ID:
-			Identifier id = new Identifier(token);
-			ref = new IdRef(id, null);
-			acceptIt();
-			if(token.kind == TokenKind.PERIOD){
-				while(token.kind == TokenKind.PERIOD){
-					acceptIt();
-					cn = new Identifier(token);
-					accept(TokenKind.ID);
-					//last changed
-					if(token.kind == TokenKind.LEFTSBRACKET){
-						acceptIt();
-						expr = parseExpression();
-						accept(TokenKind.RIGHTSBRACKET);
-						ref = new IxQRef(ref,cn, expr, null);
-					}
-					else{
-						ref = new QRef(ref, cn, null);
-					}
-				}
-			}
-			//keep parsing after period
+			/* Previously, redundant parse on the reference part,
+			 * and made errors on parsing reference here.
+			 * Now replace this redundant code with the well formed
+			 * parseReference method
+			*/
+			ref = parseReference();
 			if(token.kind == TokenKind.LPAREN){
 				acceptIt();
 				ExprList el = new ExprList();
-				if(token.kind != TokenKind.RPAREN){
+				if (token.kind != TokenKind.RPAREN){
 					el = parseArgumentList();
 				}
 				accept(TokenKind.RPAREN);
 				expr = new CallExpr(ref, el, null);
-			} else {
+			}
+			else{
 				expr = new RefExpr(ref, null);
 			}
 			return expr;
@@ -781,15 +773,15 @@ public class Parser {
 	//ParameterList ::= Type id (, Type id)*
 	private ParameterDeclList parseParameterList() throws SyntaxError{
 		ParameterDeclList pl = new ParameterDeclList();
-		String name = token.spelling;
 		TypeDenoter type = parseType();
+		String name = token.spelling; // Previously mistaken on the order for reading the parameter name
 		ParameterDecl p_dcl = new ParameterDecl(type, name, null);
 		pl.add(p_dcl);
 		accept(TokenKind.ID);
 		while(token.kind == TokenKind.COMMA){
 			acceptIt();
-			name = token.spelling;
 			type = parseType();
+			name = token.spelling;// Previously mistaken on the order for reading the parameter name
 			p_dcl = new ParameterDecl(type, name, null);
 			pl.add(p_dcl);
 			accept(TokenKind.ID);
@@ -821,6 +813,7 @@ public class Parser {
 				acceptIt();
 				accept(TokenKind.RIGHTSBRACKET);
 				final_type = new ArrayType(temp_type, null);
+				return final_type;//previously forgot to return the final type as above
 			}
 			return temp_type;
 			
