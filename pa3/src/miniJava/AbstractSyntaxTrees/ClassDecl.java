@@ -21,4 +21,6 @@ public class ClassDecl extends Declaration {
       
   public FieldDeclList fieldDeclList;
   public MethodDeclList methodDeclList;
+  // add memeber table for each class Declaration
+  public HashMap<String, Declaration> class_members;
 }

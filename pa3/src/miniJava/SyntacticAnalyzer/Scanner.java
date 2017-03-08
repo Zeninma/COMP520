@@ -144,14 +144,6 @@ public class Scanner{
 		case '*':
 			takeIt();
 			return(TokenKind.TIMES);
-//			if(currentChar == '/'){
-//				takeIt();
-//				return(TokenKind.COMMENTEND);
-//			}
-//			else{
-//				return(TokenKind.TIMES);
-//			}
-
 		
 		case '/':
 			takeIt();
@@ -246,7 +238,7 @@ public class Scanner{
 				case "return": return(TokenKind.RETURN);	case "if": return(TokenKind.IF);
 				case "else": return(TokenKind.ELSE);	case "while": return(TokenKind.WHILE);
 				case "true": return(TokenKind.TRUE);	case "false": return(TokenKind.FALSE);
-				case "new":return(TokenKind.NEW);
+				case "new":return(TokenKind.NEW); case "null": return(TokenKind.NULL);
 				
 			}
 			return(TokenKind.ID);

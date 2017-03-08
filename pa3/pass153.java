@@ -2,8 +2,8 @@
 class Test {
 
     void p() {
-        A a = 23;
-        a = --3;
+        A a = null;
+        A b = 3;
 	boolean b = c;
     }
 }

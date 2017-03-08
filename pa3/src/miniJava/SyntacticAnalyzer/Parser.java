@@ -664,6 +664,12 @@ public class Parser {
 			expr = new LiteralExpr(term,null);
 			acceptIt();
 			return expr;
+		// add NullLit
+		case NULL:
+			NullLiteral nullLit = new NullLiteral(token);
+			expr = new LiteralExpr(nullLit, null);
+			acceptIt();
+			return expr;
 			
 		case TRUE: case FALSE:
 			term = new BooleanLiteral(token);
