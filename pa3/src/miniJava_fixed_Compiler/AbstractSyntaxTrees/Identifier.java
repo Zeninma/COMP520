@@ -20,5 +20,5 @@ public class Identifier extends Terminal {
 		this.decl = new_decl;
 	}
 	
-	Declaration decl;
+	public Declaration decl;
 }
