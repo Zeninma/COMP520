@@ -221,7 +221,11 @@ public class Scanner{
 			
 		case '-':
 			takeIt();
-			return(TokenKind.MINUS);
+			if(currentChar == '-'){
+				return(TokenKind.ERROR);
+			}else{
+				return(TokenKind.MINUS);
+			}
 		//scan token for ID and ALPH KEYWORD
 		case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g':
 		case 'h': case 'i': case 'j': case 'k': case 'l': case 'm': case 'n':
