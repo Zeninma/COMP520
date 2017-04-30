@@ -296,6 +296,7 @@ public class TypeCheckVisitor implements Visitor<Object, TypeDenoter>{
 						|| expr.operator.spelling.equals(">")
 						|| expr.operator.spelling.equals("<=")
 						|| expr.operator.spelling.equals(">=")
+						|| expr.operator.spelling.equals("!=")
 						)){
 			return this.boolType;
 		}
@@ -307,7 +308,7 @@ public class TypeCheckVisitor implements Visitor<Object, TypeDenoter>{
 		}
 		else if(this.isEqual(leftType, rightType)
 				&& (expr.operator.spelling.equals("=="))
-				|| expr.operator.spelling.equals("!=")){
+				){
 			expr_type = new BaseType(TypeKind.BOOLEAN, null);
 			return expr_type;
 		}
@@ -351,6 +352,7 @@ public class TypeCheckVisitor implements Visitor<Object, TypeDenoter>{
 			}
 			else{
 				doesMatch = doesMatch && true;
+				i++;
 			}
 		}
 		if(doesMatch){
@@ -421,7 +423,7 @@ public class TypeCheckVisitor implements Visitor<Object, TypeDenoter>{
 
 	@Override
 	public TypeDenoter visitIxQRef(IxQRef ref, Object arg) {
-		return ref.decl.type;
+		return new BaseType(TypeKind.INT, null);
 	}
 	
 	

@@ -49,6 +49,7 @@ import miniJava.AbstractSyntaxTrees.ReturnStmt;
 import miniJava.AbstractSyntaxTrees.Statement;
 import miniJava.AbstractSyntaxTrees.StatementList;
 import miniJava.AbstractSyntaxTrees.ThisRef;
+import miniJava.AbstractSyntaxTrees.TypeDenoter;
 import miniJava.AbstractSyntaxTrees.TypeKind;
 import miniJava.AbstractSyntaxTrees.UnaryExpr;
 import miniJava.AbstractSyntaxTrees.VarDecl;
@@ -65,6 +66,7 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 	FieldDecl lenDecl = new FieldDecl(false, false, 
 			new BaseType(TypeKind.INT, null), "length", null);
 	ErrorReporter reporter;
+	boolean funCall = false;
 	
 	public void identifyTree(AST ast, ErrorReporter new_reporter) {
 		this.reporter = new_reporter;
@@ -91,14 +93,15 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 		// Store all ClassDecl into the class_table
 		// In the meantime, for each class, create a 'class_members' in it
 		// Put every field and method Decl into the 'class_members'
-		this.id_stack.add_scope();
 		// need to add predefined names, and base types
 		this.id_stack.initialize(prog);
+		
+		this.id_stack.add_scope();
 		ClassDeclList cl = prog.classDeclList;
 		HashMap<String, Declaration> current_table = id_stack.peek();
 		for (ClassDecl c : cl) {
 			String name = c.name;
-			if (current_table.containsKey(name) && not_predefined(name)) {
+			if (current_table.containsKey(name)) {
 				System.out.println("*** repeated class name: " + name);
 				System.exit(4);
 			} else {
@@ -243,13 +246,21 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 	public Object visitClassType(ClassType type, Object arg) {
 		String class_name = type.className.spelling;
 		//retrieve the class table
-		Declaration classDecl = this.id_stack.retrieve(class_name);
-		if(classDecl instanceof ClassDecl){
+		HashMap<String, Declaration> class_table = this.id_stack.id_stack.get(1);
+		HashMap<String, Declaration> predefined_table = this.id_stack.id_stack.get(0);
+		Declaration classDecl = class_table.get(class_name);
+		Declaration predefinedClassDecl = predefined_table.get(class_name);
+		if(classDecl!= null){
 			type.className.decl = classDecl;
 		}
 		else{
-			System.out.println("*** No class found with the name: " + class_name);
-			System.exit(4);
+			if(predefinedClassDecl != null){
+				type.className.decl = predefinedClassDecl;
+			}
+			else{
+				System.out.println("*** No class found with the name: " + class_name);
+				System.exit(4);
+			}
 		}
 		return null;
 	}
@@ -295,7 +306,13 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 	}
 
 	public Object visitCallStmt(CallStmt stmt, Object arg) {
+		this.funCall = true;
 		stmt.methodRef.visit(this, null);
+		this.funCall = false;
+		if(!(stmt.methodRef.decl instanceof MethodDecl)){
+			this.report(stmt.methodRef.decl.name+" is not a Method", stmt.posn);
+			System.exit(4);
+		}
 		ExprList el = stmt.argList;
 		for (Expression expr: el){
 			expr.visit(this,null);
@@ -356,11 +373,21 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 
 	public Object visitRefExpr(RefExpr expr, Object arg) {
 		expr.ref.visit(this, null);
+//		if(expr.ref.decl instanceof ClassDecl){
+//			this.report(expr.ref.decl.name+ " Invalid reference", expr.ref.posn);
+//		}
 		return null;
 	}
 
 	public Object visitCallExpr(CallExpr expr, Object arg) {
+		this.funCall = true;
 		expr.functionRef.visit(this, null);
+		this.funCall = false;
+		Declaration funDecl = expr.functionRef.decl;
+		if(!(funDecl instanceof MethodDecl)){
+			this.report(funDecl.name+" is not a Method", expr.posn);
+			System.exit(4);
+		}
 		ExprList el = expr.argList;
 		for(Expression arg_exp: el){
 			arg_exp.visit(this, null);
@@ -397,6 +424,10 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 				this.report("cannot reference non-static symol: "+id.spelling+" in static context", refDecl.posn);
 				System.exit(4);
 			}
+		}
+		if(!this.funCall && (refDecl instanceof MethodDecl)){
+			this.report("In valid function reference:"+id.spelling, refDecl.posn);
+			System.exit(4);
 		}
 		ref.decl =refDecl;
 		id.visit(this, null);
@@ -477,31 +508,17 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 		}
 		else if(ref_decl.type instanceof ArrayType && member_name.equals("length")){
 			ref.decl = this.lenDecl;
-			if(this.inStaticMethod){
-				if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
-					this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
-					System.exit(4);
-				}
-			}
 		}
 		// non_static, need to check the static
 		//ClassType ie x.y.z in case y in x.y is a member of class x
 		else if(ref_decl.type instanceof ClassType ){
 			String class_name = ((ClassType) ref_decl.type).className.spelling;
-			HashMap<String, Declaration> class_table = this.id_stack.id_stack.get(0);
-			HashMap<String, Declaration> member_table = ((ClassDecl)class_table.get(class_name)).class_members;
+			HashMap<String, Declaration> member_table = ((ClassDecl) this.id_stack.retrieveClass(class_name)).class_members;
 			if(member_table.containsKey(member_name)){
 				MemberDecl member_decl = (MemberDecl) member_table.get(member_name);
-				//check private
 				if(member_decl.isPrivate){
 					if(this.current_class_decl.name.equals(class_name)){
 						ref.decl = member_decl;
-						if(this.inStaticMethod){
-							if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
-								this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
-								System.exit(4);
-							}
-						}
 					}
 					else{
 						System.out.println("*** Cannot access to the private member: "+ member_name + ", of Class: " + class_name);
@@ -511,12 +528,6 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 				//check static
 				else{
 					ref.decl = member_decl;
-					if(this.inStaticMethod){
-						if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
-							this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
-							System.exit(4);
-						}
-					}
 				}
 				
 			}
@@ -542,7 +553,22 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 			String class_name = ref_decl.name;
 			HashMap<String, Declaration> member_table = ((ClassDecl) ref_decl).class_members;
 			if(member_table.containsKey(member_name)){
-				ref.decl = ref_decl;
+				FieldDecl fieldDecl = (FieldDecl) member_table.get(member_name);
+				if (fieldDecl.type instanceof ArrayType){
+					TypeDenoter elType = ((ArrayType) fieldDecl.type).eltType;
+					if (elType instanceof BaseType && elType.typeKind == TypeKind.INT){
+						ref.id.decl = fieldDecl;
+						ref.decl = this.id_stack.retrieveClass("int");
+					}
+					else{
+						this.report("Only support access to int array", ref.posn);
+						System.exit(4);
+					}
+				}
+				else{
+					this.report("QRef is not a reference to an array", ref.posn);
+					System.exit(4);
+				}
 			}
 			else{
 				System.out.println("*** Class: " + class_name + ",does not contain member: " + member_name);
@@ -550,11 +576,25 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 			}
 		}
 		else if(ref_decl.type instanceof ClassType ){
-			String class_name = ((ClassType) ref.decl.type).className.spelling;
-			HashMap<String, Declaration> class_table = this.id_stack.id_stack.get(0);
-			HashMap<String, Declaration> member_table = ((ClassDecl)class_table.get(class_name)).class_members;
+			String class_name = ((ClassType) ref_decl.type).className.spelling;
+			HashMap<String, Declaration> member_table = ((ClassDecl)this.id_stack.retrieve(class_name)).class_members;
 			if(member_table.containsKey(member_name)){
-				ref.decl = ref_decl;
+				FieldDecl fieldDecl = (FieldDecl) member_table.get(member_name);
+				if (fieldDecl.type instanceof ArrayType){
+					TypeDenoter elType = ((ArrayType) fieldDecl.type).eltType;
+					if (elType instanceof BaseType && elType.typeKind == TypeKind.INT){
+						ref.id.decl = fieldDecl;
+						ref.decl = this.id_stack.retrieveClass("int");
+					}
+					else{
+						this.report("Only support access to int array", ref.posn);
+						System.exit(4);
+					}
+				}
+				else{
+					this.report("QRef is not a reference to an array", ref.posn);
+					System.exit(4);
+				}
 			}
 			else{
 				System.out.println("*** Class: " + class_name + ",does not contain member: " + member_name);
@@ -572,7 +612,7 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 
 	public Object visitIdentifier(Identifier id, Object arg) {
 			id.decl = this.id_stack.retrieve(id.spelling);
-		return null;
+		return id.decl;
 	}
 
 	public Object visitOperator(Operator op, Object arg) {

@@ -43,8 +43,8 @@ public class Compiler {
 		visitor.identifyTree(ast, reporter);
 		TypeCheckVisitor typeVisitor = new TypeCheckVisitor();
 		typeVisitor.check(ast, reporter);
-//		Generator generator = new Generator(reporter, fileName);
-//		generator.startGenerate(ast);
+		Generator generator = new Generator(reporter, fileName);
+		generator.startGenerate(ast);
 		
 		if (reporter.hasErrors()) {
 			System.out.println("INVALID miniJava program");

@@ -16,7 +16,7 @@ class TestClass {
         // QualifiedRef
         // x = this.pubfield;
         // x = this.privfield; 
-        x = this.pubstatfield;
+        x = this.pubstafield;
     }
         
         

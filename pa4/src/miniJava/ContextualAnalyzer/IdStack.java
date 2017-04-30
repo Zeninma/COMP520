@@ -34,18 +34,19 @@ public class IdStack {
 		//			_PrintStream
 		//			INT,
 		//	        BOOLEAN
-		if(this.current_level != 1){
-			System.out.println("*** The IdStack needs exactly one scope");
+		if(this.current_level != 0){
+			System.out.println("*** The IdStack needs exactly zero scope");
 			System.exit(4);
 		}
+		HashMap<String, Declaration> current_map = new HashMap<String, Declaration>();
+		
 		ClassDecl int_decl = new ClassDecl("int", null, null, null);
-		this.add("int", int_decl);
+		current_map.put("int", int_decl);
 		ClassDecl bool_decl = new ClassDecl("Boolean", null, null, null);
-		this.add("Boolean", bool_decl);
+		current_map.put("Boolean", bool_decl);
 		ClassDecl string_decl = new ClassDecl("String", new FieldDeclList(), new MethodDeclList(), null);
 		string_decl.type = new BaseType(TypeKind.UNSUPPORTED, null);
-		this.add("String", string_decl);
-		prog.classDeclList.add(string_decl);
+		current_map.put("String", string_decl);
 		
 		//Start building decl for _PrintStream
 		ParameterDeclList print_pl = new ParameterDeclList();
@@ -60,13 +61,12 @@ public class IdStack {
 		print_methodList.add(print_methodDecl);
 		ClassDecl print_decl = new ClassDecl("_PrintStream", new FieldDeclList(),
 				print_methodList, null);
-		prog.classDeclList.add(print_decl);
 		// Add a memeber_table for printdecl
 		HashMap<String, Declaration> print_memberTable = new HashMap<String, Declaration>();
 		print_memberTable.put("println", print_methodDecl);
 		print_decl.class_members = print_memberTable;
 		// Add _PrintStream to the id_stack
-		this.add("_PrintStream", print_decl);
+		current_map.put("_PrintStream", print_decl);
 		//need to deal with predefined class
 		
 		FieldDeclList systemFdl = new FieldDeclList();
@@ -75,8 +75,9 @@ public class IdStack {
 		HashMap<String, Declaration> system_memberTable = new HashMap<String, Declaration>();
 		system_memberTable.put("out", systemFdl.get(0));
 		systemDecl.class_members = system_memberTable;
-		this.add("System", systemDecl);
-		prog.classDeclList.add(systemDecl);
+		current_map.put("System", systemDecl);
+		
+		this.id_stack.push(current_map);
 	}
 	
 	public void add(String name, Declaration decl){
@@ -87,7 +88,7 @@ public class IdStack {
 		HashMap<String, Declaration> map;
 		if(this.current_level > 3){
 			while(level > 2){
-				map = this.id_stack.get(level -1);
+				map = this.id_stack.get(level);
 				if(map.containsKey(name)){
 					System.out.println("*** Repeated name : " + name);
 					System.exit(4);
@@ -115,6 +116,19 @@ public class IdStack {
 		return this.id_stack.peek();
 	}
 	
+	public Declaration retrieveClass(String name){
+		HashMap<String, Declaration> pre_table = id_stack.get(0);
+		HashMap<String, Declaration> class_table = id_stack.get(1);
+		if (class_table.containsKey(name)){
+			return class_table.get(name);
+		}
+		else if(pre_table.containsKey(name)){
+			return pre_table.get(name);
+		}
+		else{
+			return null;
+		}
+	}
 	
 	public Declaration retrieve(String name){
 		// if found the decl corresponding to the name return the decl
@@ -122,8 +136,8 @@ public class IdStack {
 		HashMap<String, Declaration> current_class_members = this.idv.current_class_decl.class_members;
 		int level = this.current_level;
 		HashMap<String, Declaration> map;
-		while(level > 0){
-			map = this.id_stack.get(level - 1);
+		while(level >= 0){
+			map = this.id_stack.get(level);
 			if(map.containsKey(name)){
 				Declaration result_decl = map.get(name);
 				if(result_decl != null){
