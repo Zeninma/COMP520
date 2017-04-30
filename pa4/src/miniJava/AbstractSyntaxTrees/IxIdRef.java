@@ -21,4 +21,5 @@ public class IxIdRef extends BaseRef {
 	
 	public Identifier id;
 	public Expression indexExpr;
+	public Declaration decl;
 }

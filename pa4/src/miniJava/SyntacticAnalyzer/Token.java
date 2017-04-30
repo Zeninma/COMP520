@@ -11,9 +11,9 @@ public class Token {
 	public String spelling;
 	public SourcePosition posn;
 
-	public Token(TokenKind kind, String spelling) {
+	public Token(TokenKind kind, String spelling, SourcePosition posn) {
 		this.kind = kind;
 		this.spelling = spelling;
-		this.posn = null;
+		this.posn = posn;
 	}
 }

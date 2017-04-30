@@ -17,5 +17,5 @@ public class ThisRef extends BaseRef {
 	public <A, R> R visit(Visitor<A, R> v, A o) {
 		return v.visitThisRef(this, o);
 	}
-	
+
 }

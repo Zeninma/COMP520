@@ -14,7 +14,6 @@ public class QRef extends QualifiedRef {
 		this.ref = ref;
 		this.id  = id;
 	}
-
 	@Override
 	public <A, R> R visit(Visitor<A, R> v, A o) {
 		return v.visitQRef(this, o);

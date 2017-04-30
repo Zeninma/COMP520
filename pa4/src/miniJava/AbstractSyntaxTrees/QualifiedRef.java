@@ -7,5 +7,4 @@ public abstract class QualifiedRef extends Reference {
 	public QualifiedRef(SourcePosition posn){
 		super(posn);
 	}
-
 }

@@ -19,5 +19,6 @@ public class IxQRef extends QualifiedRef {
 	public Reference ref;
 	public Identifier id;
 	public Expression ixExpr;
+	public Declaration decl;
 
 }
