@@ -40,7 +40,7 @@ public class Compiler {
 		}
 
 		IdentificationVisitor visitor = new IdentificationVisitor();
-		visitor.identifyTree(ast);
+		visitor.identifyTree(ast, reporter);
 		TypeCheckVisitor typeVisitor = new TypeCheckVisitor();
 		typeVisitor.check(ast, reporter);
 //		Generator generator = new Generator(reporter, fileName);

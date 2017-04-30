@@ -7,6 +7,7 @@ package miniJava.ContextualAnalyzer;
 import java.util.HashMap;
 import java.util.Stack;
 
+import miniJava.ErrorReporter;
 import miniJava.AbstractSyntaxTrees.AST;
 import miniJava.AbstractSyntaxTrees.ArrayType;
 import miniJava.AbstractSyntaxTrees.AssignStmt;
@@ -54,6 +55,7 @@ import miniJava.AbstractSyntaxTrees.VarDecl;
 import miniJava.AbstractSyntaxTrees.VarDeclStmt;
 import miniJava.AbstractSyntaxTrees.Visitor;
 import miniJava.AbstractSyntaxTrees.WhileStmt;
+import miniJava.SyntacticAnalyzer.SourcePosition;
 
 public class IdentificationVisitor implements Visitor<Object, Object> {
 	IdStack id_stack = new IdStack(this);
@@ -62,8 +64,10 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 	// declaration for array.length
 	FieldDecl lenDecl = new FieldDecl(false, false, 
 			new BaseType(TypeKind.INT, null), "length", null);
+	ErrorReporter reporter;
 	
-	public void identifyTree(AST ast) {
+	public void identifyTree(AST ast, ErrorReporter new_reporter) {
+		this.reporter = new_reporter;
 		System.out.println("*********************** start Identification *************");
 		ast.visit(this, null);
 	}
@@ -165,11 +169,20 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 		// The table on the top of the current stack
 		// Whenver enter a new scope, push the new table onto the stack
 		//check return statement
+		
+		// check whether the return statement and the type of the method
 		int lastStmtIdx = md.statementList.size() -1;
 			if(md.type.typeKind == TypeKind.VOID){
 				// void mehod
 				if(lastStmtIdx >= 0 && ! (md.statementList.get(lastStmtIdx) instanceof ReturnStmt) ){
 					md.statementList.add(new ReturnStmt(null, null));
+				}
+				if (lastStmtIdx >= 0 && (md.statementList.get(lastStmtIdx) instanceof ReturnStmt)){
+					ReturnStmt rtStmt = (ReturnStmt) md.statementList.get(lastStmtIdx);
+					if (rtStmt.returnExpr != null){
+						this.report("void method cannot returtn value",rtStmt.posn);
+						System.exit(4);
+					}
 				}
 			}
 			else{
@@ -302,9 +315,17 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 		Expression condition = stmt.cond;
 		condition.visit(this,null);
 		Statement then_stmt = stmt.thenStmt;
+		if (then_stmt instanceof VarDeclStmt){
+			this.report("VarDecl in a branch of a conditional statement",then_stmt.posn);
+			System.exit(4);
+		}
 		then_stmt.visit(this,null);
 		Statement else_stmt = stmt.elseStmt;
 		if (else_stmt != null){
+			if (else_stmt instanceof VarDeclStmt){
+				this.report("VarDecl in a branch of a conditional statement",else_stmt.posn);
+				System.exit(4);
+			}
 			else_stmt.visit(this,null);
 		}
 		return null;
@@ -314,6 +335,10 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 		Expression condition = stmt.cond;
 		condition.visit(this, null);
 		Statement body_stmt = stmt.body;
+		if (body_stmt instanceof VarDeclStmt){
+			this.report("VarDecl in a branch of a conditional statement",body_stmt.posn);
+			System.exit(4);
+		}
 		body_stmt.visit(this, null);
 		return null;
 	}
@@ -366,7 +391,14 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 
 	public Object visitIdRef(IdRef ref, Object arg) {
 		Identifier id = ref.id;
-		ref.decl = this.id_stack.retrieve(id.spelling);
+		Declaration refDecl = this.id_stack.retrieve(id.spelling);
+		if(this.inStaticMethod){
+			if((refDecl instanceof FieldDecl) && !((FieldDecl)refDecl).isStatic ){
+				this.report("cannot reference non-static symol: "+id.spelling+" in static context", refDecl.posn);
+				System.exit(4);
+			}
+		}
+		ref.decl =refDecl;
 		id.visit(this, null);
 		return null;
 	}
@@ -374,6 +406,12 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 	public Object visitIxIdRef(IxIdRef ref, Object arg) {
 		ref.id.visit(this, null);
 		ref.decl = this.id_stack.retrieve(ref.id.spelling);
+		if(this.inStaticMethod){
+			if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
+				this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
+				System.exit(4);
+			}
+		}
 		ref.indexExpr.visit(this, null);
 		return null;
 	}
@@ -395,6 +433,12 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 				if(member_decl.isPrivate){
 					if(this.current_class_decl.equals(ref_decl)){
 						ref.decl = member_decl;
+						if(this.inStaticMethod){
+							if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
+								this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
+								System.exit(4);
+							}
+						}
 					}
 					else{
 						System.out.println("*** Cannot access to the private member: "+ member_name + ", of Class: " + class_name);
@@ -409,9 +453,21 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 						}
 					}
 					ref.decl = member_decl;
+					if(this.inStaticMethod){
+						if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
+							this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
+							System.exit(4);
+						}
+					}
 				}
 				else{
 					ref.decl = member_decl;
+					if(this.inStaticMethod){
+						if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
+							this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
+							System.exit(4);
+						}
+					}
 				}
 			}
 			else{
@@ -421,6 +477,12 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 		}
 		else if(ref_decl.type instanceof ArrayType && member_name.equals("length")){
 			ref.decl = this.lenDecl;
+			if(this.inStaticMethod){
+				if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
+					this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
+					System.exit(4);
+				}
+			}
 		}
 		// non_static, need to check the static
 		//ClassType ie x.y.z in case y in x.y is a member of class x
@@ -434,6 +496,12 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 				if(member_decl.isPrivate){
 					if(this.current_class_decl.name.equals(class_name)){
 						ref.decl = member_decl;
+						if(this.inStaticMethod){
+							if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
+								this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
+								System.exit(4);
+							}
+						}
 					}
 					else{
 						System.out.println("*** Cannot access to the private member: "+ member_name + ", of Class: " + class_name);
@@ -443,6 +511,12 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 				//check static
 				else{
 					ref.decl = member_decl;
+					if(this.inStaticMethod){
+						if((ref.decl instanceof FieldDecl) && !((FieldDecl) ref.decl).isStatic ){
+							this.report("cannot reference non-static symol: "+ref.id.spelling+" in static context", ref.decl.posn);
+							System.exit(4);
+						}
+					}
 				}
 				
 			}
@@ -515,6 +589,10 @@ public class IdentificationVisitor implements Visitor<Object, Object> {
 
 	public Object visitNullLiteral(NullLiteral nllLit, Object arg) {
 		return null;
+	}
+	
+	public void report(String errorMessage, SourcePosition posn){
+		this.reporter.reportError(errorMessage);
 	}
 
 }

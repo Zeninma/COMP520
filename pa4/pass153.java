@@ -1,12 +1,11 @@
-/***  line 8: undeclared class "weird"
+/*** line 7: cannot reference non-static symbol "x" in static context
  * COMP 520
  * Identification
  */
-class fail307 { 	
-    // public static void main(String[] args) {}
-
-    public void weird() { }
-
-    public void foo(weird x) { }
+class fail318 { 	
+    public static void main(String[] args) {
+        int y = x + 3;
+    }
+    
+    public int x;
 }
-
